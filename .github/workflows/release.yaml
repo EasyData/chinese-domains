@@ -17,7 +17,7 @@ jobs:
         run: |
           curl -w '%{stderr}%{url}\n%{stdout}' -sSf -A Mozilla/5.0 --rate 10/s https://top.chinaz.com/alltop/index{,_[2-3457]}.html \
           | cull '.ContTit' -j '{rank: "div.w90:first-child" | num, name: "a[href*=\"/site_\"]", domain: "a[href*=\"/site_\"]" @href}' \
-          | jq -c '.domain|=(split("_")[-1]|gsub(".html$";""))' \
+          | jq -c '.domain|=(split("_")[-1]|gsub("[.]html$";"")|split("=")[-1]|rtrimstr("&")|rtrimstr("?"))' \
           | gzip > chinese-domains.jsonl.gz
           count=$(zcat chinese-domains.jsonl.gz | wc -l)
           echo "count=$count" >> $GITHUB_OUTPUT
