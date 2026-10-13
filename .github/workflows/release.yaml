@@ -1,0 +1,44 @@
+name: Monthly Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 1 * *'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: rashida-thorne/setup-cull@v1
+
+      - id: generate
+        run: |
+          curl -w '%{stderr}%{url}\n%{stdout}' -sSf -A Mozilla/5.0 --rate 10/s https://top.chinaz.com/alltop/index{,_[2-3457]}.html \
+          | cull '.ContTit' -j '{rank: "div.w90:first-child" | num, name: "a[href*=\"/site_\"]", domain: "a[href*=\"/site_\"]" @href}' \
+          | jq -c '.domain|=(split("_")[-1]|gsub(".html$";""))' \
+          | gzip > chinese-domains.jsonl.gz
+          count=$(zcat chinese-domains.jsonl.gz | wc -l)
+          echo "count=$count" >> $GITHUB_OUTPUT
+          echo "date=$(TZ=UTC date +%F)" >> $GITHUB_OUTPUT
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.generate.outputs.date }}
+          body: |
+            ## Monthly Release
+            - Source: https://top.chinaz.com/alltop/
+            - Date: ${{ steps.generate.outputs.date }}
+            - Total: ${{ steps.generate.outputs.count }} items
+          files: |
+            chinese-domains.jsonl.gz
+
+      - uses: slackapi/slack-github-action@v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: "github"
+            text: "Build <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.generate.outputs.date }}|chinese-domains.jsonl.gz> successfully!"
+            username: "GitHub Actions"
